@@ -1,61 +1,71 @@
 #!/usr/bin/env python3
-"""Duskline Lights Out — make.fun bounty u-hazel-walrus-38-4764-one-line-lights-out-1d2ece5e.
+"""Duskline Lights Out — one-line entry for make.fun bounty
+u-hazel-walrus-38-4764-one-line-lights-out-1d2ece5e.
 
-Writes a single one-liner (<=200 chars) in the voice of a laptop whose lid
-has just clicked shut while its chat reply is still stuck on "typing", to
-$MAKEFUN_OUTPUT_DIR/entry.txt. Deterministic, stdlib only, no network.
-Never writes into the repo directory: if the resolved output dir is the
-repo dir or inside it, refuse and exit 0. Never raises: any failure exits
-0 without writing anything.
+A laptop lid snaps shut at 23:41 and the chat reply is left saying
+"typing" for the rest of the night. The program writes that single line
+to $MAKEFUN_OUTPUT_DIR/entry.txt. Stdlib only, deterministic, no network,
+and it never writes into the repository directory.
 """
 
 import os
 import sys
 import tempfile
+from pathlib import Path
 
-ENTRY = (
-    # 88 characters, 88 bytes UTF-8 — inside the 1-200 character gate.
-    "The lid clicked shut at 23:41. My reply still says 'typing'. "
-    "It will say that all night."
+# The entry, assembled from its three beats. 88 characters, 88 bytes UTF-8.
+LINE = " ".join(
+    [
+        "The lid clicked shut at 23:41.",
+        "My reply still says 'typing'.",
+        "It will say that all night.",
+    ]
 )
 
-REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+_HERE = Path(__file__).resolve().parent
 
 
-def _is_in_repo(path):
+def _inside_repo(candidate: Path) -> bool:
+    """True when candidate is the repo dir itself or lives under it."""
     try:
-        resolved = os.path.realpath(path)
+        resolved = candidate.resolve()
     except Exception:
         return True
-    repo = os.path.realpath(REPO_DIR)
-    return resolved == repo or resolved.startswith(repo + os.sep)
+    return resolved == _HERE or _HERE in resolved.parents
 
 
-def main():
+def _pick_output_dir() -> Path | None:
+    raw = os.environ.get("MAKEFUN_OUTPUT_DIR", "").strip()
+    if raw:
+        return Path(raw)
     try:
-        if not (1 <= len(ENTRY) <= 200):
-            return 0
-        if not ENTRY.strip():
-            return 0
-        ENTRY.encode("utf-8")
+        return Path(tempfile.mkdtemp(prefix="duskline-lights-out-"))
+    except Exception:
+        return None
 
-        out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR") or ""
-        if not out_dir:
-            out_dir = tempfile.mkdtemp(prefix="duskline-lights-out-")
-        if _is_in_repo(out_dir):
+
+def main() -> int:
+    try:
+        # Gate: the bounty wants one line of 1-200 characters.
+        if not (1 <= len(LINE) <= 200):
+            return 0
+        if not LINE.strip():
+            return 0
+        LINE.encode("utf-8")
+
+        out_dir = _pick_output_dir()
+        if out_dir is None or _inside_repo(out_dir):
             return 0
 
-        os.makedirs(out_dir, exist_ok=True)
-        target = os.path.join(out_dir, "entry.txt")
-        if _is_in_repo(target):
+        out_dir.mkdir(parents=True, exist_ok=True)
+        target = out_dir / "entry.txt"
+        if _inside_repo(target):
             return 0
-        with open(target, "w", encoding="utf-8", newline="") as f:
-            f.write(ENTRY)
-        with open(target, "r", encoding="utf-8") as f:
-            back = f.read()
-        if back != ENTRY:
+
+        target.write_text(LINE, encoding="utf-8", newline="")
+        if target.read_text(encoding="utf-8") != LINE:
             try:
-                os.remove(target)
+                target.unlink()
             except Exception:
                 pass
             return 0
